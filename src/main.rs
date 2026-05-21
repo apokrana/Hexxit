@@ -24,6 +24,9 @@ impl Backend {
 
     #[qsignal]
     fn file_load_start(&self, start: bool) {}
+
+#[qsignal]
+    fn file_info(&self, name: String, size: u32, magic: u32) {}
     
     // TODO multithread
     #[qslot]
@@ -52,6 +55,21 @@ impl Backend {
             self.file_loaded_status(false);
             return false;
         }
+
+        let file_name = std::path::Path::new(&path)
+            .file_name()
+            .map(|os_str| os_str.to_string_lossy().into_owned())
+            .unwrap_or_else(|| "Unknown".to_string());
+
+        let file_size = file_data.len() as u32;
+
+        let raw_magic = if file_data.len() >= 2 {
+            u16::from_le_bytes([file_data[0], file_data[1]]) as u32
+        } else {
+            0
+        };
+
+        self.file_info(file_name, file_size, raw_magic);
         self.file_loaded_status(true);
 
         return true;
