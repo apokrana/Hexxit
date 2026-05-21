@@ -21,7 +21,7 @@ pub struct Backend {}
 impl Backend {
 
     #[qslot]
-    fn load_file(&self, path: String) {
+    fn load_file(&self, path: String) -> bool {
         let path = path.replace("file:///","").replace("file://","");
 
         let file_data: Vec<u8> = match std::fs::read(&path) {
@@ -30,15 +30,16 @@ impl Backend {
             }
             Err(e) => {
                 eprintln!("Failed to read file: {e} (path: {path})");
-                return;
+                return false;
             }
         };
 
         let file_type = file::get_type(&file_data);
         println!("File type found {:?}", file_type);
         let file_arch = file::get_arch(&file_data);
-        println!("File {:?}", file_arch)
-
+        println!("File {:?}", file_arch);
+        
+        return true;
     }
     
 

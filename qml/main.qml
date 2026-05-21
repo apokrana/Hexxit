@@ -13,43 +13,23 @@ ApplicationWindow {
     Material.theme: Material.Dark
     Material.accent: Material.Orange
 
+    property bool loadSuccess: false
+
     FileDialog {
         id: fileDialog
         title: "Select a file"
         onAccepted: {
-            Backend.loadFile(fileDialog.selectedFile)
+            loadSuccess = Backend.loadFile(fileDialog.selectedFile)
         }
     }
+
     Button {
+        id: loadButton
         anchors.centerIn: parent
         text: "Load File"
         onClicked: fileDialog.open()
+
+        visible: !loadSuccess
     }
     
-    // ListView {
-    //     id: processView
-    //     anchors.fill: parent
-
-    //     model: Backend.getProcesses()
-
-    //     delegate: Rectangle {
-    //         width: parent.width
-    //         height: 40
-    //         color: index % 2 === 0 ? "#202020" : "#2A2A2A"
-
-    //         Text {
-    //             anchors.centerIn: parent
-    //             color: "white"
-    //             text: modelData
-    //         }
-    //     }
-    // }
-
-    // Button {
-    //     anchors.bottom: parent.bottom
-    //     anchors.horizontalCenter: parent.horizontalCenter
-    //     text: "Refresh"
-
-    //     onClicked: processView.model = Backend.getProcesses()
-    // }
 }
