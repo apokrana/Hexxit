@@ -33,19 +33,22 @@ pub fn get_type(data: &[u8]) -> FileType {
 
     println!("DOS header e_magic: {:X}", dos_header.e_magic);
     if dos_header.e_magic == IMAGE_DOS_SIGNATURE {
-        let e_lfanew = u32::from_le_bytes([
-            data[0x3C],
-            data[0x3D],
-            data[0x3E],
-            data[0x3F],
-        ]) as usize;
+        let e_lfanew = dos_header.e_lfanew.get() as usize;
 
         if e_lfanew + 4 > data.len() {
             return FileType::MSDOS;
         }
 
+        let nt_headers = match ImageNtHeadersx64::try_ref_from_bytes(&data[e_lfanew..e_lfanew + size_of::<ImageNtHeadersx64>()]) {
+            Ok(header) => header,
+            Err(e) => {
+            println!("Failed to parse NT headers: {:?}", e);
+            return FileType::MSDOS;
+            }
+        };
+
         // check pe sig
-        if &data[e_lfanew..e_lfanew + 4] == b"PE\0\0" {
+        if nt_headers.signature == NT_HEADERS_PE_SIGNATURE {
             return FileType::PE;
         }
 
@@ -56,35 +59,49 @@ pub fn get_type(data: &[u8]) -> FileType {
 }
 
 pub fn get_arch(data: &[u8]) -> Arch {
-        if data.len() < 0x40 || &data[0..2] != b"MZ" {
+    let Ok((dos_header, _)) = ImageDosHeader::try_ref_from_prefix(data) else {
         return Arch::Unknown;
-    }
-    let pe_offset = u32::from_le_bytes([
-        data[0x3C],
-        data[0x3D],
-        data[0x3E],
-        data[0x3F],
-    ]) as usize;
+    };
 
-    // check pe sig
-    if pe_offset + 6 > data.len() || &data[pe_offset..pe_offset + 4] != b"PE\0\0" {
+    if dos_header.e_magic.get() != IMAGE_DOS_SIGNATURE {
         return Arch::Unknown;
     }
 
-    let opt_header_offset = pe_offset + 4 + 20;
+    let pe_offset = dos_header.e_lfanew.get() as usize;
 
-    if opt_header_offset + 2 > data.len() {
+    if pe_offset + std::mem::size_of::<PeCommonHeader>() > data.len() {
         return Arch::Unknown;
     }
 
-    let magic = u16::from_le_bytes([
-        data[opt_header_offset],
-        data[opt_header_offset + 1],
-    ]);
+    let common_bytes = &data[pe_offset..pe_offset + std::mem::size_of::<PeCommonHeader>()];
+    
+    let Ok(common_header) = PeCommonHeader::try_ref_from_bytes(common_bytes) else {
+        return Arch::Unknown;
+    };
 
-    match magic {
-        0x10b => Arch::X86,
-        0x20b => Arch::X64,
+    if common_header.signature.get() != NT_HEADERS_PE_SIGNATURE {
+        return Arch::Unknown;
+    }
+
+    match common_header.machine.get() {
+        IMAGE_FILE_MACHINE_I386 => {
+            let nt_bytes = &data[pe_offset..];
+            if let Ok((nt_headers, _)) = ImageNtHeadersx86::try_ref_from_prefix(nt_bytes) {
+                if nt_headers.optional_header.magic.get() == IMAGE_NT_OPTIONAL_HDR32_MAGIC {
+                    return Arch::X86;
+                }
+            }
+            Arch::Unknown
+        }
+        IMAGE_FILE_MACHINE_AMD64 => {
+            let nt_bytes = &data[pe_offset..];
+            if let Ok((nt_headers, _)) = ImageNtHeadersx64::try_ref_from_prefix(nt_bytes) {
+                if nt_headers.optional_header.magic.get() == IMAGE_NT_OPTIONAL_HDR64_MAGIC {
+                    return Arch::X64;
+                }
+            }
+            Arch::Unknown
+        }
         _ => Arch::Unknown,
     }
 }
