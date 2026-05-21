@@ -22,16 +22,16 @@ ApplicationWindow {
     Connections {
         target: Backend
 
-        onFileLoadedStatus: (success) => {
+        function onFileLoadedStatus(success) {
             loaded = success
             loading = false
         }
 
-        onFileLoadStart: (started) => {
+        function onFileLoadStart(started)  {
             loading = started
         }
 
-        onFileInfo: (name, size, magic) => {
+        function onFileInfo(name, size, magic) {
             fileInfo = {
                 "name": name,
                 "size": size,
