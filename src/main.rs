@@ -1,7 +1,7 @@
 pub mod file;
 pub mod winternals;
 
-use std::fmt::Error;
+use std::{fmt::Error};
 use sysinfo::System;
 use qtbridge::{qobject_impl, QApp};
 
@@ -19,9 +19,17 @@ pub struct Backend {}
 
 #[qobject_impl(Singleton)]
 impl Backend {
+    #[qsignal]
+    fn file_loaded_status(&self, success: bool) {}
 
+    #[qsignal]
+    fn file_load_start(&self, start: bool) {}
+    
+    // TODO multithread
     #[qslot]
     fn load_file(&self, path: String) -> bool {
+        self.file_load_start(true);
+
         let path = path.replace("file:///","").replace("file://","");
 
         let file_data: Vec<u8> = match std::fs::read(&path) {
@@ -30,6 +38,7 @@ impl Backend {
             }
             Err(e) => {
                 eprintln!("Failed to read file: {e} (path: {path})");
+                self.file_loaded_status(false);
                 return false;
             }
         };
@@ -38,7 +47,13 @@ impl Backend {
         println!("File type found {:?}", file_type);
         let file_arch = file::get_arch(&file_data);
         println!("File {:?}", file_arch);
-        
+
+        if file_type == file::FileType::Unknown {
+            self.file_loaded_status(false);
+            return false;
+        }
+        self.file_loaded_status(true);
+
         return true;
     }
     

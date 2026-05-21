@@ -13,13 +13,35 @@ ApplicationWindow {
     Material.theme: Material.Dark
     Material.accent: Material.Orange
 
-    property bool loadSuccess: false
+    Connections {
+        target: Backend
+        
+        onFileLoadedStatus: (success) => {
+            if (success) {
+                console.log("File load success")
+                loadButton.visible = false
+            } else {
+                console.log("File load failed")
+                loadButton.visible = true
+            }
+        }
+
+        onFileLoadStart: (started) => {
+            if (started) {
+                console.log("File load start")
+                loadButton.visible = false
+            } else {
+                console.log("File load stop")
+                loadButton.visible = true
+            }
+        }
+    }
 
     FileDialog {
         id: fileDialog
         title: "Select a file"
         onAccepted: {
-            loadSuccess = Backend.loadFile(fileDialog.selectedFile)
+            Backend.loadFile(fileDialog.selectedFile)
         }
     }
 
@@ -28,8 +50,9 @@ ApplicationWindow {
         anchors.centerIn: parent
         text: "Load File"
         onClicked: fileDialog.open()
-
-        visible: !loadSuccess
+        visible: true
     }
+
+    
     
 }

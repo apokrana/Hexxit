@@ -2,13 +2,13 @@ use crate::winternals::*;
 
 use zerocopy::{TryFromBytes, LittleEndian, U16, U32};
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum FileType {
     Unknown,
     MSDOS,
     PE,
 }
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum Arch {
     X86,
     X64,
