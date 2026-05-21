@@ -1,17 +1,18 @@
 pub mod file;
+pub mod winternals;
 
 use std::fmt::Error;
 use sysinfo::System;
 use qtbridge::{qobject_impl, QApp};
 
-use iced_x86::{
-    Decoder,
-    DecoderOptions,
-    Formatter,
-    Instruction,
-    NasmFormatter,
-    IntelFormatter,
-};
+// use iced_x86::{
+//     Decoder,
+//     DecoderOptions,
+//     Formatter,
+//     Instruction,
+//     NasmFormatter,
+//     IntelFormatter,
+// };
 
 #[derive(Default)]
 pub struct Backend {}
