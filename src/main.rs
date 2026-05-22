@@ -98,12 +98,11 @@ impl Backend {
             .cloned()
             .unwrap_or_default();
 
-        let mut output = String::new();
-
-        for byte in file.data.iter() {
-            write!(output, "{:02X} ", byte).unwrap();
-        }
-
+        let mut output = file.data.iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                
         let mut clipboard = match Clipboard::new() {
             Ok(c) => c,
             Err(_) => return false,
