@@ -15,6 +15,14 @@ pub enum Arch {
     Unknown,
 }
 
+#[derive(Debug)]
+pub struct File {
+    pub name: String,
+    pub size: u64,
+    pub magic: u32,
+    pub data: Vec<u8>,
+}
+
 // check if ms-dos // pe 
 pub fn get_type(data: &[u8]) -> FileType {
     if data.len() <= size_of::<ImageDosHeader>() {

@@ -8,8 +8,8 @@ import Hexxit
 
 ApplicationWindow {
     visible: true
-    width: 640
-    height: 480
+    width: 960
+    height: 540
     title: "Hexxit"
 
     Material.theme: Material.Dark
@@ -19,12 +19,17 @@ ApplicationWindow {
     property bool loading: false
     property var fileInfo: ({})
 
+    property var hexRows: []
+
     Connections {
         target: Backend
 
         function onFileLoadedStatus(success) {
             loaded = success
             loading = false
+            if (success) {
+                Backend.getHexData(0, 0, 0)
+            }
         }
 
         function onFileLoadStart(started)  {
@@ -37,6 +42,10 @@ ApplicationWindow {
                 "size": size,
                 "magic": magic
             }
+        }
+
+        function onHexData(rows) {
+            hexRows = rows
         }
     }
 
@@ -111,6 +120,22 @@ ApplicationWindow {
                 text: "Load File"
                 visible: !loading && !loaded
                 onClicked: fileDialog.open()
+            }
+            ListView {
+                anchors.fill: parent
+                visible: loaded
+                clip: true
+                model: hexRows
+                cacheBuffer: 2000
+
+                delegate: Text {
+                    width: ListView.view.width
+                    text: modelData
+                    font.family: "Courier New"
+                    font.pixelSize: 13
+                    color: "#d4d4d4"
+                    leftPadding: 8
+                }
             }
         }
     }

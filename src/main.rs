@@ -17,6 +17,7 @@ use qtbridge::{qobject, qobject_impl, QApp, qsignal};
 pub struct Backend {
     rx: Mutex<mpsc::Receiver<LoadResult>>,
     tx: mpsc::Sender<LoadResult>,
+    loaded_files: Mutex<Vec<file::File>>,
 }
 
 impl Default for Backend {
@@ -25,12 +26,13 @@ impl Default for Backend {
         Self {
             tx,
             rx: Mutex::new(rx),
+            loaded_files: Mutex::new(Vec::new()),
         }
     }
 }
 
 enum LoadResult {
-    Success { name: String, size: u32, magic: u32 },
+    Success(file::File),
     Failure,
 }
 
@@ -61,17 +63,20 @@ pub fn load_file_internal(path: &str) -> LoadResult {
         .map(|os_str| os_str.to_string_lossy().into_owned())
         .unwrap_or_else(|| "Unknown".to_string());
 
-    let size = file_data.len() as u32;
+    let size = file_data.len() as u64;
 
     let magic = if file_data.len() >= 2 {
         u16::from_le_bytes([file_data[0], file_data[1]]) as u32
     } else {
         0
     };
-
-    thread::sleep(time::Duration::from_secs(5));
     
-    return LoadResult::Success { name, size, magic };
+    return LoadResult::Success(file::File {
+        name,
+        size,
+        magic,
+        data: file_data,
+    });
 }
 
 #[qobject_impl(Singleton)]
@@ -83,15 +88,16 @@ impl Backend {
     fn file_load_start(&self, start: bool) {}
 
     #[qsignal]
-    fn file_info(&self, name: String, size: u32, magic: u32) {}
+    fn file_info(&self, name: String, size: u64, magic: u32) {}
 
     #[qslot]
     fn poll_results(&self) {
         let rx = self.rx.lock().unwrap();
         while let Ok(result) = rx.try_recv() {
             match result {
-                LoadResult::Success { name, size, magic } => {
-                    self.file_info(name, size, magic);
+                LoadResult::Success(file) => {
+                    self.file_info(file.name.clone(), file.size, file.magic);
+                    self.loaded_files.lock().unwrap().push(file);
                     self.file_loaded_status(true);
                 }
                 LoadResult::Failure => {
@@ -114,7 +120,33 @@ impl Backend {
 
         return true;
     }
-    
+
+    #[qsignal]
+    fn hex_data(&self, rows: Vec<String>) {}
+
+    #[qslot]
+    fn get_hex_data(&self, file_index: u32, offset: u64, rows: u32) {
+        let files = self.loaded_files.lock().unwrap();
+        let Some(file) = files.get(file_index as usize) else { return; };
+
+        let result: Vec<String> = file.data
+            .chunks(16)
+            .enumerate()
+            .map(|(i, row)| {
+                let addr = i * 16;
+                let hex: String = row.iter()
+                    .map(|b| format!("{:02X}", b))
+                    .collect::<Vec<_>>()
+                    .join(" ");
+                let ascii: String = row.iter()
+                    .map(|&b| if b.is_ascii_graphic() { b as char } else { '.' })
+                    .collect();
+                format!("{:08X}  {:<47}  {}", addr, hex, ascii)
+            })
+            .collect();
+
+        self.hex_data(result);
+    }
 
     #[qslot]
     fn get_processes(&self) -> Vec<String> {
