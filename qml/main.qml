@@ -40,6 +40,13 @@ ApplicationWindow {
         }
     }
 
+    Timer {
+        interval: 100
+        running: true
+        repeat: true
+        onTriggered: Backend.pollResults()
+    }
+
     FileDialog {
         id: fileDialog
         title: "Select a file"
@@ -54,7 +61,7 @@ ApplicationWindow {
         Rectangle {
             Layout.preferredWidth: 200
             Layout.fillHeight: true
-            color: "#222222"
+            color: Material.background
 
             Column {
                 anchors.fill: parent
@@ -89,13 +96,20 @@ ApplicationWindow {
         Rectangle {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: "#333333"
+            color: Qt.lighter(Material.background, 1.1)
+
+            BusyIndicator {
+                id: loadingIndicator
+                anchors.centerIn: parent
+                
+                running: loading 
+                visible: loading
+            }
 
             Button {
                 anchors.centerIn: parent
-                text: loading ? "Loading..." : "Load File"
-                enabled: !loading
-                visible: !loaded
+                text: "Load File"
+                visible: !loading && !loaded
                 onClicked: fileDialog.open()
             }
         }
