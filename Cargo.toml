@@ -9,3 +9,4 @@ iced-x86 = {version = "1.21.0"}
 sysinfo = "0.38.4"
 bytemuck = "1.25.0"
 zerocopy = { version = "0.8.48", features = ["derive"] }
+arboard = "3.6.1"

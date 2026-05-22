@@ -1,10 +1,10 @@
 pub mod file;
 pub mod winternals;
 
-use std::{thread,time,fmt::Error,sync::{mpsc, Mutex}};
+use std::{thread,time,fmt::Error,fmt::Write, sync::{mpsc, Mutex}};
 use sysinfo::System;
 use qtbridge::{qobject, qobject_impl, QApp, qsignal};
-
+use arboard::Clipboard;
 // use iced_x86::{
 //     Decoder,
 //     DecoderOptions,
@@ -14,10 +14,59 @@ use qtbridge::{qobject, qobject_impl, QApp, qsignal};
 //     IntelFormatter,
 // };
 
+enum LoadResult {
+    Success(file::FileInfo),
+    Failure,
+}
+
+pub fn load_file_internal(path: &str) -> LoadResult {
+    let path = path.replace("file:///","").replace("file://","");
+
+    let data: Vec<u8> = match std::fs::read(&path) {
+        Ok(data) => {
+            data
+        }
+        Err(e) => {
+            eprintln!("Failed to read file: {e} (path: {path})");
+            return LoadResult::Failure;
+        }
+    };
+
+    let file_type = file::get_type(&data);
+    println!("File type found {:?}", file_type);
+    let arch = file::get_arch(&data);
+    println!("File {:?}", arch);
+
+    if file_type == file::FileType::Unknown {
+        return LoadResult::Failure;
+    }
+
+    let name = std::path::Path::new(&path)
+        .file_name()
+        .map(|os_str| os_str.to_string_lossy().into_owned())
+        .unwrap_or_else(|| "Unknown".to_string());
+
+    let size = data.len() as u64;
+
+    let magic = if data.len() >= 2 {
+        u16::from_le_bytes([data[0], data[1]]) as u32
+    } else {
+        0
+    };
+    
+    return LoadResult::Success(file::FileInfo {
+        name,
+        size,
+        data,
+        arch,
+        file_type,
+        magic,
+    });
+}
 pub struct Backend {
     rx: Mutex<mpsc::Receiver<LoadResult>>,
     tx: mpsc::Sender<LoadResult>,
-    loaded_files: Mutex<Vec<file::File>>,
+    loaded_files: Mutex<Vec<file::FileInfo>>,
 }
 
 impl Default for Backend {
@@ -31,56 +80,74 @@ impl Default for Backend {
     }
 }
 
-enum LoadResult {
-    Success(file::File),
-    Failure,
-}
-
-pub fn load_file_internal(path: &str) -> LoadResult {
-    let path = path.replace("file:///","").replace("file://","");
-
-    let file_data: Vec<u8> = match std::fs::read(&path) {
-        Ok(data) => {
-            data
-        }
-        Err(e) => {
-            eprintln!("Failed to read file: {e} (path: {path})");
-            return LoadResult::Failure;
-        }
-    };
-
-    let file_type = file::get_type(&file_data);
-    println!("File type found {:?}", file_type);
-    let file_arch = file::get_arch(&file_data);
-    println!("File {:?}", file_arch);
-
-    if file_type == file::FileType::Unknown {
-        return LoadResult::Failure;
-    }
-
-    let name = std::path::Path::new(&path)
-        .file_name()
-        .map(|os_str| os_str.to_string_lossy().into_owned())
-        .unwrap_or_else(|| "Unknown".to_string());
-
-    let size = file_data.len() as u64;
-
-    let magic = if file_data.len() >= 2 {
-        u16::from_le_bytes([file_data[0], file_data[1]]) as u32
-    } else {
-        0
-    };
-    
-    return LoadResult::Success(file::File {
-        name,
-        size,
-        magic,
-        data: file_data,
-    });
-}
 
 #[qobject_impl(Singleton)]
 impl Backend {
+
+    // context bar helpers
+    // #[qslot]
+    // fn copy_as_c_vec(&self) -> String {
+        
+    // }
+    #[qslot]
+    fn copy_raw(&self, index: u32) -> bool {
+        let files = self.loaded_files.lock().unwrap();
+
+        let file = files
+            .get(index as usize)
+            .cloned()
+            .unwrap_or_default();
+
+        let mut output = String::new();
+
+        for byte in file.data.iter() {
+            write!(output, "{:02X} ", byte).unwrap();
+        }
+
+        let mut clipboard = match Clipboard::new() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        match clipboard.set_text(output) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
+
+    #[qslot]
+    fn get_file_count(&self) -> u32 {
+        self.loaded_files.lock().unwrap().len() as u32
+    }
+
+    #[qslot]
+    fn get_file_name(&self, index: u32) -> String {
+        let files = self.loaded_files.lock().unwrap();
+
+        files.get(index as usize)
+            .map(|f| f.name.clone())
+            .unwrap_or_default()
+    }
+
+    #[qslot]
+    fn get_file_size(&self, index: u32) -> u64 {
+        let files = self.loaded_files.lock().unwrap();
+
+        files.get(index as usize)
+            .map(|f| f.size)
+            .unwrap_or(0)
+    }
+
+    #[qslot]
+    fn get_file_magic(&self, index: u32) -> u32 {
+        let files = self.loaded_files.lock().unwrap();
+
+        files.get(index as usize)
+            .map(|f| f.magic)
+            .unwrap_or(0)
+    }
+
     #[qsignal]
     fn file_loaded_status(&self, success: bool) {}
 

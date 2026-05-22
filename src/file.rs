@@ -2,25 +2,31 @@ use crate::winternals::*;
 
 use zerocopy::{TryFromBytes, LittleEndian, U16, U32};
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum FileType {
+    #[default]
     Unknown,
     MSDOS,
     PE,
 }
-#[derive(Debug, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Default)]
 pub enum Arch {
+    #[default]
     X86,
     X64,
     Unknown,
 }
 
-#[derive(Debug)]
-pub struct File {
+#[derive(Debug, Clone, Default)]
+pub struct FileInfo {
     pub name: String,
+
     pub size: u64,
-    pub magic: u32,
     pub data: Vec<u8>,
+
+    pub arch: Arch,
+    pub file_type: FileType,
+    pub magic: u32,
 }
 
 // check if ms-dos // pe 

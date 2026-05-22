@@ -19,6 +19,9 @@ ApplicationWindow {
     property bool loading: false
     property var fileInfo: ({})
 
+    property int currentFile: 0
+    property int fileCount: 0
+
     property var hexRows: []
 
     Connections {
@@ -28,7 +31,8 @@ ApplicationWindow {
             loaded = success
             loading = false
             if (success) {
-                Backend.getHexData(0, 0, 0)
+                fileCount =  Backend.getFileCount()
+                Backend.getHexData(currentFile, 0, 0)
             }
         }
 
@@ -64,77 +68,183 @@ ApplicationWindow {
         }
     }
 
-    RowLayout {
+    DropArea {
         anchors.fill: parent
+        onDropped: (drop) => {
+            if (drop.hasUrls) {
+                Backend.loadFile(drop.urls[0])
+            }
+        }
+    }
+    
+    menuBar: MenuBar {
+        height: 26
 
-        Rectangle {
-            Layout.preferredWidth: 200
-            Layout.fillHeight: true
-            color: Material.background
+        delegate: MenuBarItem {
+            implicitHeight: 26
+            implicitWidth: 50
 
-            Column {
-                anchors.fill: parent
-                anchors.margins: 10
-                spacing: 10
-
-                Text {
-                    text: "File Info"
-                    font.bold: true
-                    color: "white"
-                }
-
-                Text {
-                    text: fileInfo.name ? "Name: " + fileInfo.name : ""
-                    color: "white"
-                }
-
-                Text {
-                    text: fileInfo.size ? "Size: " + fileInfo.size + " bytes" : ""
-                    color: "white"
-                }
-
-                Text {
-                    text: fileInfo.magic
-                        ? "Magic: 0x" + fileInfo.magic.toString(16).toUpperCase()
-                        : ""
-                    color: "white"
-                }
+            contentItem: Text {
+                text: parent.text
+                font.pixelSize: 12
+                color: "white"
+                verticalAlignment: Text.AlignVCenter
             }
         }
 
-        Rectangle {
+        Menu {
+            title: "File"
+
+            delegate: MenuItem {
+                implicitHeight: 24
+                implicitWidth: 140
+
+                contentItem: Text {
+                    text: parent.text
+                    font.pixelSize: 12
+                    color: "white"
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            Action {
+                text: "Load File..."
+                shortcut: StandardKey.Open
+                onTriggered: fileDialog.open()
+            }
+
+            Action {
+                text: "Exit"
+                shortcut: StandardKey.Quit
+                onTriggered: Qt.quit()
+            }
+        }
+
+        Menu {
+            title: "Edit"
+
+            delegate: MenuItem {
+                implicitHeight: 24
+                implicitWidth: 140
+
+                contentItem: Text {
+                    text: parent.text
+                    font.pixelSize: 12
+                    color: "white"
+                    verticalAlignment: Text.AlignVCenter
+                }
+            }
+
+            Action {
+                text: "Copy"
+                onTriggered: Backend.copyRaw(currentFile);
+            }
+
+            Action {
+                text: "Select All"
+                shortcut: StandardKey.SelectAll
+            }
+        }
+    }
+
+    ColumnLayout {
+        anchors.fill: parent
+        spacing: 0
+
+        RowLayout {
             Layout.fillWidth: true
             Layout.fillHeight: true
-            color: Qt.lighter(Material.background, 1.1)
+            spacing: 0
 
-            BusyIndicator {
-                id: loadingIndicator
-                anchors.centerIn: parent
-                
-                running: loading 
-                visible: loading
+            // Left sidebar
+            Rectangle {
+                Layout.preferredWidth: 200
+                Layout.fillHeight: true
+                color: Material.background
+
+                Column {
+                    anchors.fill: parent
+                    anchors.margins: 10
+                    spacing: 10
+
+                    Text {
+                        text: fileInfo.name
+                            ? "Name: " + fileInfo.name
+                            : "Name:"
+                        color: "white"
+                    }
+
+                    Text {
+                        text: fileInfo.size
+                            ? "Size: " + fileInfo.size + " bytes"
+                            : "Size:"
+                        color: "white"
+                    }
+
+                    Text {
+                        text: fileInfo.magic
+                            ? "Magic: 0x" + fileInfo.magic.toString(16).toUpperCase()
+                            : "Magic:"
+                        color: "white"
+                    }
+                }
             }
 
-            Button {
-                anchors.centerIn: parent
-                text: "Load File"
-                visible: !loading && !loaded
-                onClicked: fileDialog.open()
-            }
-            ListView {
-                anchors.fill: parent
-                visible: loaded
-                clip: true
-                model: hexRows
-                cacheBuffer: 2000
+            // Hex viewer and tabs
+            ColumnLayout {
+                Layout.fillWidth: true
+                Layout.fillHeight: true
+                spacing: 0
 
-                delegate: Text {
-                    width: ListView.view.width
-                    text: modelData
-                    font.family: "Courier New"
-                    font.pixelSize: 13
-                    color: "#d4d4d4"
-                    leftPadding: 8
+                TabBar {
+                    id: tabs
+                    Layout.fillWidth: true
+
+                    Repeater {
+                        model: fileCount
+
+                        TabButton {
+                            text: Backend.getFileName(index)
+
+                            onClicked: {
+                                currentFile = index
+                                Backend.getHexData(index, 0, 0)
+                            }
+                        }
+                        
+                    }
+                }
+
+                // Hex area
+                Rectangle {
+                    Layout.fillWidth: true
+                    Layout.fillHeight: true
+                    color: Qt.lighter(Material.background, 1.1)
+
+                    BusyIndicator {
+                        anchors.centerIn: parent
+                        running: loading
+                        visible: loading
+                    }
+
+                    ListView {
+                        anchors.fill: parent
+                        visible: loaded
+                        clip: true
+                        model: hexRows
+                        cacheBuffer: 2000
+
+                        delegate: Text {
+                            width: ListView.view.width
+                            text: modelData
+
+                            font.family: "Courier New"
+                            font.pixelSize: 13
+
+                            color: "#d4d4d4"
+                            leftPadding: 8
+                        }
+                    }
                 }
             }
         }
