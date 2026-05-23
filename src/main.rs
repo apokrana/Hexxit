@@ -5,6 +5,7 @@ use std::{thread,time,fmt::Error,fmt::Write, sync::{mpsc, Mutex}};
 use sysinfo::System;
 use qtbridge::{qobject, qobject_impl, QApp, qsignal};
 use arboard::Clipboard;
+use file::Arch;
 // use iced_x86::{
 //     Decoder,
 //     DecoderOptions,
@@ -112,8 +113,62 @@ impl Backend {
             Ok(_) => true,
             Err(_) => false,
         }
+
     }
 
+    #[qslot]
+    fn copy_as_vec_cpp(&self, index: u32) -> bool {
+        let files = self.loaded_files.lock().unwrap();
+
+        let file = files
+            .get(index as usize)
+            .cloned()
+            .unwrap_or_default();
+
+        let inner = file.data.iter()
+            .map(|b| format!("0x{:02X}", b))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let output = format!("std::vector<uint8_t> data = {{ {} }};", inner);
+
+        let mut clipboard = match Clipboard::new() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        match clipboard.set_text(output) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
+
+    #[qslot]
+    fn copy_as_vec_rs(&self, index: u32) -> bool {
+        let files = self.loaded_files.lock().unwrap();
+
+        let file = files
+            .get(index as usize)
+            .cloned()
+            .unwrap_or_default();
+
+        let inner = file.data.iter()
+            .map(|b| format!("0x{:02X}", b))
+            .collect::<Vec<_>>()
+            .join(", ");
+
+        let output = format!("let data: Vec<u8> = vec![{}];", inner);
+
+        let mut clipboard = match Clipboard::new() {
+            Ok(c) => c,
+            Err(_) => return false,
+        };
+
+        match clipboard.set_text(output) {
+            Ok(_) => true,
+            Err(_) => false,
+        }
+    }
 
     #[qslot]
     fn get_file_count(&self) -> u32 {
@@ -154,7 +209,7 @@ impl Backend {
     fn file_load_start(&self, start: bool) {}
 
     #[qsignal]
-    fn file_info(&self, name: String, size: u64, magic: u32) {}
+    fn file_info(&self, name: String, arch: String, size: u64, magic: u32) {}
 
     #[qslot]
     fn poll_results(&self) {
@@ -162,7 +217,12 @@ impl Backend {
         while let Ok(result) = rx.try_recv() {
             match result {
                 LoadResult::Success(file) => {
-                    self.file_info(file.name.clone(), file.size, file.magic);
+                    let arch = match file.arch {
+                        Arch::X86 => "x86".to_string(),
+                        Arch::X64 => "x64".to_string(),
+                        Arch::Unknown => "Unknown".to_string()
+                    };
+                    self.file_info(file.name.clone(), arch, file.size, file.magic);
                     self.loaded_files.lock().unwrap().push(file);
                     self.file_loaded_status(true);
                 }

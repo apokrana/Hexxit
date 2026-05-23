@@ -40,11 +40,12 @@ ApplicationWindow {
             loading = started
         }
 
-        function onFileInfo(name, size, magic) {
+        function onFileInfo(name, arch, size, magic) {
             fileInfo = {
                 "name": name,
                 "size": size,
-                "magic": magic
+                "magic": magic,
+                "arch": arch
             }
         }
 
@@ -139,6 +140,14 @@ ApplicationWindow {
                 text: "Copy"
                 onTriggered: Backend.copyRaw(currentFile);
             }
+            Action {
+                text: "Copy As Vector (C++)"
+                onTriggered: Backend.copyAsVecCpp(currentFile);
+            }
+            Action {
+                text: "Copy As Vector (Rust)"
+                onTriggered: Backend.copyAsVecRs(currentFile);
+            }
 
             Action {
                 text: "Select All"
@@ -171,6 +180,15 @@ ApplicationWindow {
                         text: fileInfo.name
                             ? "Name: " + fileInfo.name
                             : "Name:"
+                        color: "white"
+                    }
+
+                    Text {
+                        text: {
+                            fileInfo.arch 
+                            ? "Arch:  " + fileInfo.arch
+                            : "Arch:"
+                        }
                         color: "white"
                     }
 
