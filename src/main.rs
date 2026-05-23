@@ -20,6 +20,7 @@ enum LoadResult {
     Failure,
 }
 
+
 pub fn load_file_internal(path: &str) -> LoadResult {
     let path = path.replace("file:///","").replace("file://","");
 
@@ -96,10 +97,8 @@ impl Default for Backend {
 #[qobject_impl(Singleton)]
 impl Backend {
 
-    // context bar helpers
-
     #[qslot]
-    fn copy_raw(&self, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
+    fn copy_hex_data(&self,copy_type: String, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
         let files = self.loaded_files.lock().unwrap();
         let Some(file) = files.get(file_index as usize) else { return false; };
 
@@ -114,79 +113,37 @@ impl Backend {
 
         if start >= end { return false; }
 
-        let output = file.data[start..end]
-            .iter()
-            .map(|b| format!("{:02X}", b))
-            .collect::<Vec<_>>()
-            .join(" ");
+        let output = match copy_type.as_str() {
+            "raw" => {
+                let inner = file.data[start..end]
+                .iter()
+                .map(|b| format!("{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(" ");
+                
+                format!("{}", inner)
+            }
+            "cpp" => {
+                let inner = file.data[start..end]
+                .iter()
+                .map(|b| format!("0x{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(", ");
 
-        let mut clipboard = match Clipboard::new() {
-            Ok(c) => c,
-            Err(_) => return false,
+                format!("std::vector<uint8_t> data = {{ {} }};", inner)
+            }
+            "rust" => {
+                let inner = file.data[start..end]
+                .iter()
+                .map(|b| format!("0x{:02X}", b))
+                .collect::<Vec<_>>()
+                .join(", ");
+
+                format!("let data: Vec<u8> = vec![{}];", inner)
+            }
+
+            _ => String::new()
         };
-
-        match clipboard.set_text(output) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
-    }
-
-    #[qslot]
-    fn copy_as_vec_cpp(&self, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
-        let files = self.loaded_files.lock().unwrap();
-        let Some(file) = files.get(file_index as usize) else { return false; };
-
-        let start = match char_to_byte_idx(sel_start, file.data.len(), row_offset) {
-            Some(b) => b,
-            None => return false,
-        };
-        let end = match char_to_byte_idx(sel_end.saturating_sub(1), file.data.len(), row_offset) {
-            Some(b) => b + 1,
-            None => return false,
-        };
-
-        if start >= end { return false; }
-
-        let inner = file.data[start..end]
-            .iter()
-            .map(|b| format!("0x{:02X}", b))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let output = format!("std::vector<uint8_t> data = {{ {} }};", inner);
-
-        let mut clipboard = match Clipboard::new() {
-            Ok(c) => c,
-            Err(_) => return false,
-        };
-
-        match clipboard.set_text(output) {
-            Ok(_) => true,
-            Err(_) => false,
-        }
-    }
-
-    #[qslot]
-    fn copy_as_vec_rs(&self, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
-        let files = self.loaded_files.lock().unwrap();
-        let Some(file) = files.get(file_index as usize) else { return false; };
-
-        let start = match char_to_byte_idx(sel_start, file.data.len(), row_offset) {
-            Some(b) => b,
-            None => return false,
-        };
-        let end = match char_to_byte_idx(sel_end.saturating_sub(1), file.data.len(), row_offset) {
-            Some(b) => b + 1,
-            None => return false,
-        };
-
-        let inner = file.data[start..end]
-            .iter()
-            .map(|b| format!("0x{:02X}", b))
-            .collect::<Vec<_>>()
-            .join(", ");
-
-        let output = format!("let data: Vec<u8> = vec![{}];", inner);
 
         let mut clipboard = match Clipboard::new() {
             Ok(c) => c,

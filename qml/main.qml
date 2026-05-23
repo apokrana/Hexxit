@@ -152,17 +152,16 @@ ApplicationWindow {
             Action {
                 text: "Copy"
                 shortcut: StandardKey.Copy
-                onTriggered: {
-                    Backend.copyRaw(currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset)
-                }
+                onTriggered: Backend.copyHexData("raw", currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
+                
             }
             Action {
                 text: "Copy As Vector (C++)"
-                onTriggered: Backend.copyAsVecCpp(currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
+                onTriggered: Backend.copyHexData("cpp", currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
             }
             Action {
                 text: "Copy As Vector (Rust)"
-                onTriggered: Backend.copyAsVecRs(currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
+                onTriggered: Backend.copyHexData("rust", currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
             }
 
             Action {
