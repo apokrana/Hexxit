@@ -22,7 +22,18 @@ ApplicationWindow {
     property int currentFile: 0
     property int fileCount: 0
 
-    property var hexRows: []
+    // Hex table
+    property int hexTotalRows: 0
+    property int currentRowOffset: 0
+    property string hexText: ""
+
+    function reloadHex() {
+        var rowHeight = 17
+        var firstRow = Math.max(0, Math.floor(hexScroll.contentY / rowHeight))
+        var visibleRows = Math.ceil(hexScroll.height / rowHeight) + 50
+        currentRowOffset = firstRow
+        Backend.getHexData(currentFile, firstRow, visibleRows)
+    }
 
     Connections {
         target: Backend
@@ -31,8 +42,10 @@ ApplicationWindow {
             loaded = success
             loading = false
             if (success) {
-                fileCount =  Backend.getFileCount()
-                Backend.getHexData(currentFile, 0, 0)
+                fileCount = Backend.getFileCount()
+                hexTotalRows = Math.ceil(Backend.getFileSize(currentFile) / 16)
+                currentRowOffset = 0
+                reloadHex()
             }
         }
 
@@ -49,8 +62,8 @@ ApplicationWindow {
             }
         }
 
-        function onHexData(rows) {
-            hexRows = rows
+        function onHexData(text) {
+            hexText = text
         }
     }
 
@@ -138,20 +151,24 @@ ApplicationWindow {
 
             Action {
                 text: "Copy"
-                onTriggered: Backend.copyRaw(currentFile);
+                shortcut: StandardKey.Copy
+                onTriggered: {
+                    Backend.copyRaw(currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset)
+                }
             }
             Action {
                 text: "Copy As Vector (C++)"
-                onTriggered: Backend.copyAsVecCpp(currentFile);
+                onTriggered: Backend.copyAsVecCpp(currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
             }
             Action {
                 text: "Copy As Vector (Rust)"
-                onTriggered: Backend.copyAsVecRs(currentFile);
+                onTriggered: Backend.copyAsVecRs(currentFile, hexView.selectionStart, hexView.selectionEnd, currentRowOffset);
             }
 
             Action {
                 text: "Select All"
                 shortcut: StandardKey.SelectAll
+                onTriggered: hexText.SelectAll()
             }
         }
     }
@@ -238,6 +255,7 @@ ApplicationWindow {
                     Layout.fillWidth: true
                     Layout.fillHeight: true
                     color: Qt.lighter(Material.background, 1.1)
+                    clip: true
 
                     BusyIndicator {
                         anchors.centerIn: parent
@@ -245,22 +263,43 @@ ApplicationWindow {
                         visible: loading
                     }
 
-                    ListView {
+                    Flickable {
+                        id: hexScroll
                         anchors.fill: parent
                         visible: loaded
                         clip: true
-                        model: hexRows
-                        cacheBuffer: 2000
+                        contentWidth: width
+                        contentHeight: hexTotalRows * 17
 
-                        delegate: Text {
-                            width: ListView.view.width
-                            text: modelData
+                        ScrollBar.vertical: ScrollBar {}
+                        ScrollBar.horizontal: ScrollBar { policy: ScrollBar.AlwaysOff }
 
+                        onContentYChanged: {
+                            var rowHeight = 17
+                            var firstRow = Math.max(0, Math.floor(contentY / rowHeight))
+                            if (firstRow !== currentRowOffset) {
+                                currentRowOffset = firstRow
+                                var visibleRows = Math.ceil(hexScroll.height / rowHeight) + 50
+                                Backend.getHexData(currentFile, firstRow, visibleRows)
+                            }
+                        }
+                    
+                        TextEdit {
+                            id: hexView
+                            y: currentRowOffset * 17
+                            width: hexScroll.width
+                            text: hexText
+                            readOnly: true
+                            selectByMouse: true
+                            textFormat: TextEdit.PlainText
+                            selectionColor: Material.accent
+                            selectedTextColor: "#000000"
                             font.family: "Courier New"
                             font.pixelSize: 13
-
                             color: "#d4d4d4"
                             leftPadding: 8
+                            topPadding: 4
+                            wrapMode: TextEdit.NoWrap
                         }
                     }
                 }

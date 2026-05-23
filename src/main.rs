@@ -64,6 +64,17 @@ pub fn load_file_internal(path: &str) -> LoadResult {
         magic,
     });
 }
+
+fn char_to_byte_idx(char_pos: u32, data_len: usize, row_offset: u32) -> Option<usize> {
+    const ROW_LEN: u32 = 76;
+    const HEX_START: u32 = 10;
+    const HEX_END: u32 = 57;
+    let row = (char_pos / ROW_LEN) as usize + row_offset as usize;
+    let col = (char_pos % ROW_LEN).clamp(HEX_START, HEX_END - 1);
+    let byte_idx = row * 16 + ((col - HEX_START) / 3) as usize;
+    (byte_idx < data_len).then_some(byte_idx)
+}
+
 pub struct Backend {
     rx: Mutex<mpsc::Receiver<LoadResult>>,
     tx: mpsc::Sender<LoadResult>,
@@ -86,24 +97,29 @@ impl Default for Backend {
 impl Backend {
 
     // context bar helpers
-    // #[qslot]
-    // fn copy_as_c_vec(&self) -> String {
-        
-    // }
+
     #[qslot]
-    fn copy_raw(&self, index: u32) -> bool {
+    fn copy_raw(&self, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
         let files = self.loaded_files.lock().unwrap();
+        let Some(file) = files.get(file_index as usize) else { return false; };
 
-        let file = files
-            .get(index as usize)
-            .cloned()
-            .unwrap_or_default();
+        let start = match char_to_byte_idx(sel_start, file.data.len(), row_offset) {
+            Some(b) => b,
+            None => return false,
+        };
+        let end = match char_to_byte_idx(sel_end.saturating_sub(1), file.data.len(), row_offset) {
+            Some(b) => b + 1,
+            None => return false,
+        };
 
-        let mut output = file.data.iter()
-                    .map(|b| format!("{:02X}", b))
-                    .collect::<Vec<_>>()
-                    .join(" ");
-                
+        if start >= end { return false; }
+
+        let output = file.data[start..end]
+            .iter()
+            .map(|b| format!("{:02X}", b))
+            .collect::<Vec<_>>()
+            .join(" ");
+
         let mut clipboard = match Clipboard::new() {
             Ok(c) => c,
             Err(_) => return false,
@@ -113,19 +129,26 @@ impl Backend {
             Ok(_) => true,
             Err(_) => false,
         }
-
     }
 
     #[qslot]
-    fn copy_as_vec_cpp(&self, index: u32) -> bool {
+    fn copy_as_vec_cpp(&self, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
         let files = self.loaded_files.lock().unwrap();
+        let Some(file) = files.get(file_index as usize) else { return false; };
 
-        let file = files
-            .get(index as usize)
-            .cloned()
-            .unwrap_or_default();
+        let start = match char_to_byte_idx(sel_start, file.data.len(), row_offset) {
+            Some(b) => b,
+            None => return false,
+        };
+        let end = match char_to_byte_idx(sel_end.saturating_sub(1), file.data.len(), row_offset) {
+            Some(b) => b + 1,
+            None => return false,
+        };
 
-        let inner = file.data.iter()
+        if start >= end { return false; }
+
+        let inner = file.data[start..end]
+            .iter()
             .map(|b| format!("0x{:02X}", b))
             .collect::<Vec<_>>()
             .join(", ");
@@ -144,15 +167,21 @@ impl Backend {
     }
 
     #[qslot]
-    fn copy_as_vec_rs(&self, index: u32) -> bool {
+    fn copy_as_vec_rs(&self, file_index: u32, sel_start: u32, sel_end: u32, row_offset: u32) -> bool {
         let files = self.loaded_files.lock().unwrap();
+        let Some(file) = files.get(file_index as usize) else { return false; };
 
-        let file = files
-            .get(index as usize)
-            .cloned()
-            .unwrap_or_default();
+        let start = match char_to_byte_idx(sel_start, file.data.len(), row_offset) {
+            Some(b) => b,
+            None => return false,
+        };
+        let end = match char_to_byte_idx(sel_end.saturating_sub(1), file.data.len(), row_offset) {
+            Some(b) => b + 1,
+            None => return false,
+        };
 
-        let inner = file.data.iter()
+        let inner = file.data[start..end]
+            .iter()
             .map(|b| format!("0x{:02X}", b))
             .collect::<Vec<_>>()
             .join(", ");
@@ -248,16 +277,22 @@ impl Backend {
     }
 
     #[qsignal]
-    fn hex_data(&self, rows: Vec<String>) {}
+    fn hex_data(&self, text: String) {}
 
     #[qslot]
     fn get_hex_data(&self, file_index: u32, offset: u64, rows: u32) {
         let files = self.loaded_files.lock().unwrap();
         let Some(file) = files.get(file_index as usize) else { return; };
 
-        let result: Vec<String> = file.data
+        let row_offset = offset as usize;
+        let row_count = if rows > 0 { rows as usize } else { usize::MAX };
+
+
+        let result = file.data
             .chunks(16)
             .enumerate()
+            .skip(row_offset)
+            .take(row_count)
             .map(|(i, row)| {
                 let addr = i * 16;
                 let hex: String = row.iter()
@@ -269,7 +304,8 @@ impl Backend {
                     .collect();
                 format!("{:08X}  {:<47}  {}", addr, hex, ascii)
             })
-            .collect();
+            .collect::<Vec<_>>()
+            .join("\n");
 
         self.hex_data(result);
     }
