@@ -1,3 +1,5 @@
+#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
+
 pub mod file;
 pub mod winternals;
 
@@ -186,6 +188,18 @@ impl Backend {
         files.get(index as usize)
             .map(|f| f.magic)
             .unwrap_or(0)
+    }
+
+    #[qslot]
+    fn get_file_arch(&self, index: u32) -> String {
+        let files = self.loaded_files.lock().unwrap();
+        files.get(index as usize)
+            .map(|f| match f.arch {
+                Arch::X86    => "x86".to_string(),
+                Arch::X64    => "x64".to_string(),
+                Arch::Unknown => "Unknown".to_string(),
+            })
+            .unwrap_or_default()
     }
 
     #[qsignal]

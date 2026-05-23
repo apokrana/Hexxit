@@ -242,7 +242,16 @@ ApplicationWindow {
 
                             onClicked: {
                                 currentFile = index
-                                Backend.getHexData(index, 0, 0)
+                                hexTotalRows = Math.ceil(Backend.getFileSize(index) / 16)
+                                currentRowOffset = 0
+                                hexScroll.contentY = 0
+                                fileInfo = {
+                                    "name":  Backend.getFileName(index),
+                                    "size":  Backend.getFileSize(index),
+                                    "magic": Backend.getFileMagic(index),
+                                    "arch":  Backend.getFileArch(index)
+                                }
+                                reloadHex()
                             }
                         }
                         
